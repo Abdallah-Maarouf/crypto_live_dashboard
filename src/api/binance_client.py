@@ -6,8 +6,53 @@ import time
 import requests
 from typing import Dict, List, Optional, Any
 import logging
+from functools import wraps
 
 logger = logging.getLogger(__name__)
+
+
+def cache_response(ttl_seconds: int):
+    """
+    Simple caching decorator for API responses.
+    
+    Args:
+        ttl_seconds: Time to live for cached responses in seconds
+    """
+    def decorator(func):
+        cache = {}
+        
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Create cache key from function name and arguments
+            cache_key = f"{func.__name__}:{str(args)}:{str(sorted(kwargs.items()))}"
+            current_time = time.time()
+            
+            # Clean up expired cache entries first
+            keys_to_remove = []
+            for key, (_, timestamp) in cache.items():
+                if current_time - timestamp >= ttl_seconds:
+                    keys_to_remove.append(key)
+            
+            for key in keys_to_remove:
+                del cache[key]
+            
+            # Check if we have a valid cached response
+            if cache_key in cache:
+                cached_data, timestamp = cache[cache_key]
+                logger.debug(f"Cache hit for {func.__name__}")
+                return cached_data
+            
+            # Make the actual API call
+            logger.debug(f"Cache miss for {func.__name__}, making API call")
+            result = func(*args, **kwargs)
+            
+            # Store in cache
+            cache[cache_key] = (result, current_time)
+            
+            return result
+        
+        return wrapper
+    return decorator
 
 
 class BinanceAPIError(Exception):
@@ -124,11 +169,50 @@ class BinanceClient:
         """
         return self._make_request("/time")
     
+    @cache_response(3600)  # Cache for 1 hour - exchange info doesn't change frequently
     def get_exchange_info(self) -> Dict[str, Any]:
         """
         Get exchange information from Binance API.
         
         Returns:
-            Exchange information response
+            Exchange information response containing trading rules and symbol information
         """
         return self._make_request("/exchangeInfo")
+    
+    @cache_response(30)  # Cache for 30 seconds - balance freshness with API limits
+    def get_ticker_24hr(self, symbol: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get 24hr ticker price change statistics.
+        
+        Args:
+            symbol: Trading pair symbol (e.g., 'BTCUSDT'). If None, returns all symbols.
+            
+        Returns:
+            24hr ticker statistics for the symbol(s)
+        """
+        params = {}
+        if symbol:
+            params['symbol'] = symbol.upper()
+        
+        return self._make_request("/ticker/24hr", params)
+    
+    @cache_response(300)  # Cache for 5 minutes - historical data doesn't change frequently
+    def get_klines(self, symbol: str, interval: str, limit: int = 500) -> List[List[Any]]:
+        """
+        Get historical candlestick data (klines).
+        
+        Args:
+            symbol: Trading pair symbol (e.g., 'BTCUSDT')
+            interval: Kline interval (e.g., '1h', '4h', '1d', '1w')
+            limit: Number of klines to return (default: 500, max: 1000)
+            
+        Returns:
+            List of kline data arrays [open_time, open, high, low, close, volume, close_time, ...]
+        """
+        params = {
+            'symbol': symbol.upper(),
+            'interval': interval,
+            'limit': min(limit, 1000)  # Enforce API limit
+        }
+        
+        return self._make_request("/klines", params)
