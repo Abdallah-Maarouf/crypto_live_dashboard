@@ -1,0 +1,54 @@
+# Crypto Dashboard Configuration
+
+# Binance API Configuration
+binance:
+  base_url: "https://api.binance.com/api/v3"
+  endpoints:
+    ticker_24hr: "/ticker/24hr"
+    klines: "/klines"
+    exchange_info: "/exchangeInfo"
+
+  # Rate limiting and timeout settings
+  request_timeout: 5 # seconds
+  max_retries: 3
+  backoff_factor: 1.5
+
+# Application Settings
+app:
+  title: "Live Crypto Dashboard"
+  description: "Real-time cryptocurrency analytics powered by Binance API"
+
+  # Refresh intervals (seconds)
+  auto_refresh_interval: 60
+  cache_ttl:
+    ticker_data: 30
+    historical_data: 300
+    exchange_info: 3600
+
+  # Default symbols for KPI cards
+  default_symbols:
+    - "BTCUSDT"
+    - "ETHUSDT"
+
+  # Chart configuration
+  chart:
+    default_interval: "1d"
+    available_intervals:
+      - "1h"
+      - "4h"
+      - "1d"
+      - "1w"
+    default_limit: 100
+
+# UI Configuration
+ui:
+  theme:
+    primary_color: "#1f77b4"
+    success_color: "#2ca02c"
+    danger_color: "#d62728"
+    background_color: "#f8f9fa"
+    card_background: "#ffffff"
+
+  layout:
+    sidebar_width: 300
+    max_table_rows: 10
