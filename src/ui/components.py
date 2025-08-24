@@ -23,32 +23,23 @@ def render_kpi_card(title: str, value: str, change: Optional[float] = None,
         high (str, optional): 24h high value (formatted)
         low (str, optional): 24h low value (formatted)
     """
-    change_class = get_change_class(change) if change is not None else ''
-    change_symbol = '+' if change and change >= 0 else ''
-    
-    card_html = f"""
-    <div class="metric-card">
-        <div class="metric-title">{title}</div>
-        <div class="metric-value">{value}</div>
-    """
-    
+    # Use Streamlit's built-in metric component
     if change is not None:
-        card_html += f"""
-        <div class="metric-change {change_class}">
-            {change_symbol}{change:.2f}%
-        </div>
-        """
+        change_text = f"{change:.2f}%"
+        st.metric(
+            label=title,
+            value=value,
+            delta=change_text
+        )
+    else:
+        st.metric(
+            label=title,
+            value=value
+        )
     
+    # Add range information if provided
     if high and low:
-        card_html += f"""
-        <div class="metric-range">
-            24h Range: {low} - {high}
-        </div>
-        """
-    
-    card_html += "</div>"
-    
-    st.markdown(card_html, unsafe_allow_html=True)
+        st.caption(f"24h Range: {low} - {high}")
 
 
 def render_crypto_table(data: List[Dict[str, Any]], title: str = "Cryptocurrency Data"):
@@ -152,10 +143,9 @@ def render_dashboard_header(title: str, subtitle: str):
         title (str): Main dashboard title
         subtitle (str): Dashboard subtitle/description
     """
-    st.markdown(f"""
-    <div class="dashboard-title">{title}</div>
-    <div class="dashboard-subtitle">{subtitle}</div>
-    """, unsafe_allow_html=True)
+    st.title(title)
+    st.markdown(f"*{subtitle}*")
+    st.markdown("")
 
 
 def render_metric_grid(metrics: List[Dict[str, Any]], columns: int = 2):
