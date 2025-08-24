@@ -1,0 +1,230 @@
+"""
+Reusable UI components for the Crypto Dashboard.
+
+This module provides consistent, styled components that can be used
+throughout the Streamlit application for displaying cryptocurrency data.
+"""
+
+import streamlit as st
+import pandas as pd
+from typing import List, Dict, Any, Optional
+from .styles import get_color_for_change, get_change_class
+
+
+def render_kpi_card(title: str, value: str, change: Optional[float] = None, 
+                   high: Optional[str] = None, low: Optional[str] = None):
+    """
+    Render a KPI card with consistent styling for displaying key metrics.
+    
+    Args:
+        title (str): The title/label for the metric
+        value (str): The main value to display (formatted)
+        change (float, optional): 24h percentage change
+        high (str, optional): 24h high value (formatted)
+        low (str, optional): 24h low value (formatted)
+    """
+    change_class = get_change_class(change) if change is not None else ''
+    change_symbol = '+' if change and change >= 0 else ''
+    
+    card_html = f"""
+    <div class="metric-card">
+        <div class="metric-title">{title}</div>
+        <div class="metric-value">{value}</div>
+    """
+    
+    if change is not None:
+        card_html += f"""
+        <div class="metric-change {change_class}">
+            {change_symbol}{change:.2f}%
+        </div>
+        """
+    
+    if high and low:
+        card_html += f"""
+        <div class="metric-range">
+            24h Range: {low} - {high}
+        </div>
+        """
+    
+    card_html += "</div>"
+    
+    st.markdown(card_html, unsafe_allow_html=True)
+
+
+def render_crypto_table(data: List[Dict[str, Any]], title: str = "Cryptocurrency Data"):
+    """
+    Render a styled table for displaying cryptocurrency data with color-coded changes.
+    
+    Args:
+        data (List[Dict]): List of cryptocurrency data dictionaries
+        title (str): Title for the table section
+    """
+    if not data:
+        st.warning("No cryptocurrency data available to display.")
+        return
+    
+    # Create section header
+    st.markdown(f'<div class="section-header">{title}</div>', unsafe_allow_html=True)
+    
+    # Prepare table HTML
+    table_html = """
+    <div class="crypto-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Price (USD)</th>
+                    <th>24h Change</th>
+                    <th>Volume</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+    
+    for coin in data:
+        symbol = coin.get('symbol', 'N/A')
+        price = coin.get('price', 0)
+        change = coin.get('change_24h', 0)
+        volume = coin.get('volume', 0)
+        
+        # Format values
+        price_formatted = f"${price:,.2f}" if price else "N/A"
+        change_formatted = f"{'+' if change >= 0 else ''}{change:.2f}%"
+        volume_formatted = f"${volume:,.0f}" if volume else "N/A"
+        
+        # Get change class for styling
+        change_class = 'crypto-change-positive' if change >= 0 else 'crypto-change-negative'
+        
+        table_html += f"""
+        <tr>
+            <td class="crypto-symbol">{symbol}</td>
+            <td class="crypto-price">{price_formatted}</td>
+            <td class="{change_class}">{change_formatted}</td>
+            <td>{volume_formatted}</td>
+        </tr>
+        """
+    
+    table_html += """
+            </tbody>
+        </table>
+    </div>
+    """
+    
+    st.markdown(table_html, unsafe_allow_html=True)
+
+
+def render_loading_state(message: str = "Loading data..."):
+    """
+    Render a consistent loading state with spinner and message.
+    
+    Args:
+        message (str): Loading message to display
+    """
+    st.markdown(f"""
+    <div class="loading-spinner">
+        <div class="loading-text">{message}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_error_message(message: str, error_type: str = "error"):
+    """
+    Render a styled error or warning message.
+    
+    Args:
+        message (str): Error message to display
+        error_type (str): Type of message ('error' or 'warning')
+    """
+    css_class = "error-message" if error_type == "error" else "warning-message"
+    
+    st.markdown(f"""
+    <div class="{css_class}">
+        {message}
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_dashboard_header(title: str, subtitle: str):
+    """
+    Render the main dashboard header with title and subtitle.
+    
+    Args:
+        title (str): Main dashboard title
+        subtitle (str): Dashboard subtitle/description
+    """
+    st.markdown(f"""
+    <div class="dashboard-title">{title}</div>
+    <div class="dashboard-subtitle">{subtitle}</div>
+    """, unsafe_allow_html=True)
+
+
+def render_metric_grid(metrics: List[Dict[str, Any]], columns: int = 2):
+    """
+    Render multiple KPI cards in a responsive grid layout.
+    
+    Args:
+        metrics (List[Dict]): List of metric dictionaries with keys:
+                             'title', 'value', 'change', 'high', 'low'
+        columns (int): Number of columns in the grid
+    """
+    cols = st.columns(columns)
+    
+    for i, metric in enumerate(metrics):
+        with cols[i % columns]:
+            render_kpi_card(
+                title=metric.get('title', ''),
+                value=metric.get('value', ''),
+                change=metric.get('change'),
+                high=metric.get('high'),
+                low=metric.get('low')
+            )
+
+
+def render_search_results(coin_data: Dict[str, Any]):
+    """
+    Render search results for a specific cryptocurrency.
+    
+    Args:
+        coin_data (Dict): Dictionary containing coin information
+    """
+    if not coin_data:
+        render_error_message("No data found for the searched cryptocurrency.", "warning")
+        return
+    
+    st.markdown('<div class="section-header">Search Results</div>', unsafe_allow_html=True)
+    
+    # Create a single metric card for the searched coin
+    render_kpi_card(
+        title=f"{coin_data.get('symbol', 'N/A')} Price",
+        value=f"${coin_data.get('price', 0):,.2f}",
+        change=coin_data.get('change_24h', 0),
+        high=f"${coin_data.get('high_24h', 0):,.2f}",
+        low=f"${coin_data.get('low_24h', 0):,.2f}"
+    )
+
+
+def render_portfolio_summary(portfolio_data: Dict[str, Any]):
+    """
+    Render portfolio summary with total value and breakdown.
+    
+    Args:
+        portfolio_data (Dict): Portfolio data with total value and holdings
+    """
+    if not portfolio_data:
+        render_error_message("No portfolio data available.", "warning")
+        return
+    
+    st.markdown('<div class="section-header">Portfolio Summary</div>', unsafe_allow_html=True)
+    
+    # Total portfolio value card
+    total_value = portfolio_data.get('total_value', 0)
+    render_kpi_card(
+        title="Total Portfolio Value",
+        value=f"${total_value:,.2f}",
+        change=portfolio_data.get('total_change_24h')
+    )
+    
+    # Individual holdings table
+    holdings = portfolio_data.get('holdings', [])
+    if holdings:
+        render_crypto_table(holdings, "Portfolio Holdings")
