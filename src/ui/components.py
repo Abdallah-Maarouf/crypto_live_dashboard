@@ -215,7 +215,7 @@ def render_search_results(coin_data: Dict[str, Any]):
 
 def render_crypto_table(data: List[Dict[str, Any]], title: str = "Cryptocurrency Data"):
     """
-    Render a styled table for displaying cryptocurrency data with color-coded changes.
+    Render a mobile-optimized table for displaying cryptocurrency data with color-coded changes.
     
     Args:
         data (List[Dict]): List of cryptocurrency data dictionaries
@@ -228,6 +228,9 @@ def render_crypto_table(data: List[Dict[str, Any]], title: str = "Cryptocurrency
     # Create section header
     st.subheader(title)
     
+    # Add mobile-friendly table container
+    st.markdown('<div class="crypto-table">', unsafe_allow_html=True)
+    
     # Prepare data for DataFrame
     table_data = []
     for coin in data:
@@ -236,45 +239,76 @@ def render_crypto_table(data: List[Dict[str, Any]], title: str = "Cryptocurrency
         change = coin.get('change_24h', 0)
         volume = coin.get('volume', 0)
         
-        # Format values
-        price_formatted = f"${price:,.2f}" if price else "N/A"
+        # Format values with mobile-friendly precision
+        if price >= 1:
+            price_formatted = f"${price:,.2f}"
+        elif price >= 0.01:
+            price_formatted = f"${price:.4f}"
+        else:
+            price_formatted = f"${price:.6f}"
+            
         change_formatted = f"{'+' if change >= 0 else ''}{change:.2f}%"
-        volume_formatted = f"${volume:,.0f}" if volume else "N/A"
+        
+        # Format volume with appropriate units for mobile
+        if volume >= 1e9:
+            volume_formatted = f"${volume/1e9:.1f}B"
+        elif volume >= 1e6:
+            volume_formatted = f"${volume/1e6:.1f}M"
+        elif volume >= 1e3:
+            volume_formatted = f"${volume/1e3:.1f}K"
+        else:
+            volume_formatted = f"${volume:,.0f}" if volume else "N/A"
         
         table_data.append({
             'Symbol': symbol,
-            'Price (USD)': price_formatted,
+            'Price': price_formatted,
             '24h Change': change_formatted,
-            'Volume (USD)': volume_formatted
+            'Volume': volume_formatted,
+            '_change_value': change,  # Hidden column for styling
+            '_price_value': price     # Hidden column for sorting
         })
     
-    # Create DataFrame and display
+    # Create DataFrame
     df = pd.DataFrame(table_data)
     
-    # Use Streamlit's dataframe with custom styling
+    # Mobile-optimized column configuration
+    column_config = {
+        'Symbol': st.column_config.TextColumn(
+            'Symbol',
+            width='small',
+            help="Cryptocurrency symbol"
+        ),
+        'Price': st.column_config.TextColumn(
+            'Price (USD)',
+            width='medium',
+            help="Current price in USD"
+        ),
+        '24h Change': st.column_config.TextColumn(
+            '24h Change',
+            width='small',
+            help="24-hour price change percentage"
+        ),
+        'Volume': st.column_config.TextColumn(
+            'Volume (24h)',
+            width='small',
+            help="24-hour trading volume"
+        )
+    }
+    
+    # Display the dataframe with mobile optimizations
     st.dataframe(
-        df,
+        df.drop(['_change_value', '_price_value'], axis=1),
         use_container_width=True,
         hide_index=True,
-        column_config={
-            'Symbol': st.column_config.TextColumn(
-                'Symbol',
-                width='small'
-            ),
-            'Price (USD)': st.column_config.TextColumn(
-                'Price (USD)',
-                width='medium'
-            ),
-            '24h Change': st.column_config.TextColumn(
-                '24h Change',
-                width='small'
-            ),
-            'Volume (USD)': st.column_config.TextColumn(
-                'Volume (USD)',
-                width='large'
-            )
-        }
+        column_config=column_config,
+        height=400  # Fixed height for better mobile scrolling
     )
+    
+    # Close table container
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Add mobile-friendly table navigation hint
+    st.caption("💡 Swipe horizontally to view all columns on mobile devices")
 
 
 def render_portfolio_summary(portfolio_data: Dict[str, Any]):
@@ -307,6 +341,7 @@ def render_portfolio_summary(portfolio_data: Dict[str, Any]):
 def render_price_chart(chart_data: pd.DataFrame, symbol: str, timeframe: str) -> None:
     """
     Render an interactive Plotly candlestick chart for cryptocurrency price data.
+    Optimized for both desktop and mobile viewing.
     
     Args:
         chart_data (pd.DataFrame): DataFrame with OHLCV data (columns: timestamp, open, high, low, close, volume)
@@ -318,14 +353,17 @@ def render_price_chart(chart_data: pd.DataFrame, symbol: str, timeframe: str) ->
         return
     
     try:
-        # Create candlestick chart
+        from .styles import get_mobile_optimized_chart_config, get_mobile_chart_layout
+        
+        # Create candlestick chart with proper hover configuration
         fig = go.Figure(data=go.Candlestick(
             x=chart_data['timestamp'],
             open=chart_data['open'],
             high=chart_data['high'],
             low=chart_data['low'],
             close=chart_data['close'],
-            name=f"{symbol} Price"
+            name=f"{symbol} Price",
+            hoverinfo='x+y+name'
         ))
         
         # Add volume as a secondary trace (bar chart)
@@ -336,34 +374,53 @@ def render_price_chart(chart_data: pd.DataFrame, symbol: str, timeframe: str) ->
             yaxis="y2",
             opacity=0.3,
             marker_color='rgba(158,202,225,0.8)',
-            hoverinfo='x+y+name'
+            hovertemplate='<b>Volume</b><br>' +
+                         'Date: %{x}<br>' +
+                         'Volume: %{y:,.0f}<br>' +
+                         '<extra></extra>'
         ))
         
-        # Update layout for better appearance
+        # Get mobile-optimized layout
+        mobile_layout = get_mobile_chart_layout()
+        
+        # Update layout for responsive design
         fig.update_layout(
             title=f"{symbol} Price Chart ({timeframe})",
-            title_font_size=20,
-            title_x=0.5,
+            title_font_size=mobile_layout['title']['font']['size'],
+            title_x=mobile_layout['title']['x'],
+            title_xanchor=mobile_layout['title']['xanchor'],
             xaxis_title="Time",
             yaxis_title="Price (USD)",
             yaxis2=dict(
                 title="Volume",
                 overlaying="y",
                 side="right",
-                showgrid=False
+                showgrid=False,
+                tickfont=dict(size=8)
             ),
             template="plotly_white",
-            height=600,
+            height=mobile_layout['height'],
             showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            ),
-            margin=dict(l=50, r=50, t=80, b=50),
-            hovermode='x'
+            legend=mobile_layout['legend'],
+            margin=mobile_layout['margin'],
+            hovermode=mobile_layout['hovermode'],
+            dragmode=mobile_layout['dragmode'],
+            font=mobile_layout['font']
+        )
+        
+        # Update axis styling for mobile
+        fig.update_xaxes(
+            title_font=mobile_layout['xaxis']['title']['font'],
+            tickfont=mobile_layout['xaxis']['tickfont'],
+            showgrid=mobile_layout['xaxis']['showgrid'],
+            gridwidth=mobile_layout['xaxis']['gridwidth']
+        )
+        
+        fig.update_yaxes(
+            title_font=mobile_layout['yaxis']['title']['font'],
+            tickfont=mobile_layout['yaxis']['tickfont'],
+            showgrid=mobile_layout['yaxis']['showgrid'],
+            gridwidth=mobile_layout['yaxis']['gridwidth']
         )
         
         # Customize candlestick colors
@@ -373,11 +430,18 @@ def render_price_chart(chart_data: pd.DataFrame, symbol: str, timeframe: str) ->
             selector=dict(type='candlestick')
         )
         
-        # Remove range slider for cleaner look
+        # Remove range slider for cleaner mobile look
         fig.update_layout(xaxis_rangeslider_visible=False)
         
-        # Display the chart
-        st.plotly_chart(fig, use_container_width=True)
+        # Get mobile-optimized config
+        mobile_config = get_mobile_optimized_chart_config()
+        
+        # Display the chart with mobile-optimized configuration
+        st.plotly_chart(
+            fig, 
+            use_container_width=True,
+            config=mobile_config
+        )
         
     except Exception as e:
         render_error_message(f"Error rendering chart: {str(e)}", "error")
@@ -385,7 +449,7 @@ def render_price_chart(chart_data: pd.DataFrame, symbol: str, timeframe: str) ->
 
 def render_chart_controls(available_symbols: List[str]) -> tuple[str, str]:
     """
-    Render cryptocurrency selection dropdown and timeframe selector controls.
+    Render mobile-optimized cryptocurrency selection dropdown and timeframe selector controls.
     
     Args:
         available_symbols (List[str]): List of available cryptocurrency symbols
@@ -393,40 +457,45 @@ def render_chart_controls(available_symbols: List[str]) -> tuple[str, str]:
     Returns:
         tuple: (selected_symbol, selected_timeframe)
     """
-    # Define available timeframes with labels
+    # Define available timeframes with mobile-friendly labels
     timeframe_options = {
-        '1h': '1 Hour',
-        '4h': '4 Hours', 
-        '1d': '1 Day',
-        '1w': '1 Week'
+        '1h': '1H',
+        '4h': '4H', 
+        '1d': '1D',
+        '1w': '1W'
     }
     
-    # Create two columns for controls
-    col1, col2 = st.columns(2)
+    # Create responsive columns - stack on mobile
+    col1, col2 = st.columns([2, 1])
     
     with col1:
         selected_symbol = st.selectbox(
-            "Select Cryptocurrency",
+            "📈 Cryptocurrency",
             options=available_symbols,
             index=0 if available_symbols else None,
-            help="Choose a cryptocurrency to view its historical price chart"
+            help="Choose a cryptocurrency to view its historical price chart",
+            key="chart_symbol_selector"
         )
     
     with col2:
         selected_timeframe_key = st.selectbox(
-            "Select Timeframe",
+            "⏱️ Timeframe",
             options=list(timeframe_options.keys()),
             format_func=lambda x: timeframe_options[x],
             index=2,  # Default to '1d' (1 Day)
-            help="Choose the timeframe for the candlestick chart"
+            help="Choose the timeframe for the candlestick chart",
+            key="chart_timeframe_selector"
         )
+    
+    # Add helpful hint for mobile users
+    st.caption("💡 Use the dropdowns above to select cryptocurrency and timeframe for the chart")
     
     return selected_symbol, selected_timeframe_key
 
 
 def render_portfolio_input_form() -> List[Dict[str, Any]]:
     """
-    Render portfolio input form for cryptocurrency holdings.
+    Render mobile-optimized portfolio input form for cryptocurrency holdings.
     
     Returns:
         List of portfolio holdings with symbol and quantity
@@ -438,29 +507,30 @@ def render_portfolio_input_form() -> List[Dict[str, Any]]:
     if 'portfolio_holdings' not in st.session_state:
         st.session_state.portfolio_holdings = []
     
-    # Add new holding form
+    # Add new holding form with mobile-optimized layout
     with st.expander("➕ Add New Holding", expanded=len(st.session_state.portfolio_holdings) == 0):
-        col1, col2, col3 = st.columns([2, 2, 1])
+        # Mobile-first: stack inputs vertically on small screens
+        col1, col2 = st.columns([1, 1])
         
         with col1:
             new_symbol = st.text_input(
-                "Cryptocurrency Symbol",
-                placeholder="e.g., BTC, ETH, ADA",
+                "💰 Crypto Symbol",
+                placeholder="BTC, ETH, ADA...",
                 help="Enter the symbol without USDT (e.g., BTC for Bitcoin)",
-                key="new_symbol_input"
+                key="new_symbol_input",
+                max_chars=10
             )
         
         with col2:
             new_quantity = st.text_input(
-                "Quantity",
-                placeholder="e.g., 0.5, 10.25",
+                "📊 Quantity",
+                placeholder="0.5, 10.25...",
                 help="Enter the amount you own",
                 key="new_quantity_input"
             )
         
-        with col3:
-            st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
-            add_button = st.button("Add", type="primary", use_container_width=True)
+        # Full-width add button for better mobile experience
+        add_button = st.button("➕ Add to Portfolio", type="primary", use_container_width=True)
         
         # Handle adding new holding
         if add_button:
@@ -482,33 +552,54 @@ def render_portfolio_input_form() -> List[Dict[str, Any]]:
                     st.success(f"✅ Added {parsed_quantity} {new_symbol.upper()} to your portfolio!")
                     
                     # Clear input fields by rerunning
-                    st.rerun()
+                    try:
+                        st.rerun()
+                    except Exception:
+                        # Fallback: just show success message without rerun
+                        pass
             else:
                 st.error(f"❌ {error_message}")
     
-    # Display current holdings
+    # Display current holdings with mobile-optimized layout
     if st.session_state.portfolio_holdings:
-        st.markdown("#### Current Holdings")
+        st.markdown("#### 📋 Current Holdings")
         
-        # Create a table of current holdings with remove buttons
+        # Mobile-friendly holdings display
         for i, holding in enumerate(st.session_state.portfolio_holdings):
-            col1, col2, col3 = st.columns([2, 2, 1])
-            
-            with col1:
-                st.text(holding['symbol'])
-            
-            with col2:
-                st.text(f"{holding['quantity']:,.8f}".rstrip('0').rstrip('.'))
-            
-            with col3:
-                if st.button("🗑️", key=f"remove_{i}", help=f"Remove {holding['symbol']}"):
-                    st.session_state.portfolio_holdings.pop(i)
-                    st.rerun()
+            with st.container():
+                col1, col2, col3 = st.columns([2, 3, 1])
+                
+                with col1:
+                    st.markdown(f"**{holding['symbol']}**")
+                
+                with col2:
+                    quantity_display = f"{holding['quantity']:,.8f}".rstrip('0').rstrip('.')
+                    st.markdown(f"`{quantity_display}`")
+                
+                with col3:
+                    if st.button("🗑️", key=f"remove_{i}", help=f"Remove {holding['symbol']}", use_container_width=True):
+                        st.session_state.portfolio_holdings.pop(i)
+                        try:
+                            st.rerun()
+                        except Exception:
+                            # Fallback: just remove from session state
+                            pass
+                
+                # Add separator for better mobile readability
+                if i < len(st.session_state.portfolio_holdings) - 1:
+                    st.markdown("---")
         
-        # Clear all button
-        if st.button("🗑️ Clear All Holdings", type="secondary"):
-            st.session_state.portfolio_holdings = []
-            st.rerun()
+        # Mobile-optimized clear all button
+        st.markdown("")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🗑️ Clear All Holdings", type="secondary", use_container_width=True):
+                st.session_state.portfolio_holdings = []
+                try:
+                    st.rerun()
+                except Exception:
+                    # Fallback: just clear session state
+                    pass
     
     else:
         st.info("📝 No holdings added yet. Add your first cryptocurrency holding above to start tracking your portfolio.")

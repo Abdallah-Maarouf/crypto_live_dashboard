@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional, List
 
 # Import our custom modules
 from src.api.binance_client import BinanceClient, BinanceAPIError
-from src.ui.styles import inject_custom_css
+from src.ui.styles import inject_custom_css, inject_mobile_meta_tags
 from src.ui.components import (
     render_dashboard_header, 
     render_metric_grid, 
@@ -27,15 +27,21 @@ from src.data.processor import prepare_chart_data
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Page configuration
+# Page configuration with mobile optimization
 st.set_page_config(
     page_title="Live Crypto Dashboard",
     page_icon="₿",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
+    menu_items={
+        'Get Help': 'https://github.com/your-repo/crypto-dashboard',
+        'Report a bug': 'https://github.com/your-repo/crypto-dashboard/issues',
+        'About': "Live Crypto Dashboard - Real-time cryptocurrency analytics powered by Binance API"
+    }
 )
 
-# Inject custom CSS
+# Inject mobile meta tags and custom CSS
+inject_mobile_meta_tags()
 inject_custom_css()
 
 
@@ -305,15 +311,23 @@ def initialize_session_state():
 
 def render_refresh_controls():
     """
-    Render manual refresh controls.
+    Render mobile-optimized manual refresh controls.
     """
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # Mobile-first design: full-width button with better touch target
+    col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        if st.button("🔄 Refresh All Data", use_container_width=True):
+        if st.button("🔄 Refresh All Data", use_container_width=True, type="secondary"):
             # Clear all cached data
             st.cache_data.clear()
-            st.rerun()
+            try:
+                st.rerun()
+            except Exception:
+                # Fallback: just clear cache
+                pass
+    
+    # Add last update info for mobile users
+    st.caption("💡 Data refreshes automatically: BTC/ETH (30s), Top 10 (60s), Charts (5min)")
 
 
 def render_homepage():

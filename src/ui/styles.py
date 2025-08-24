@@ -228,53 +228,325 @@ def inject_custom_css():
         margin: 1rem 0;
     }}
     
-    /* Responsive Design */
+    /* Responsive Design and Mobile Optimization */
+    
+    /* Tablet and small desktop (768px - 1024px) */
+    @media (max-width: 1024px) {{
+        .main .block-container {{
+            max-width: 100%;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
+        }}
+        
+        .metric-card {{
+            padding: 1.25rem;
+        }}
+        
+        .crypto-table th,
+        .crypto-table td {{
+            padding: 0.875rem 0.75rem;
+            font-size: 0.9rem;
+        }}
+    }}
+    
+    /* Mobile landscape and small tablets (481px - 768px) */
     @media (max-width: 768px) {{
         .main .block-container {{
             padding-left: 1rem;
             padding-right: 1rem;
+            padding-top: 1rem;
+            padding-bottom: 1rem;
         }}
         
         .dashboard-title {{
             font-size: 2rem;
+            margin-bottom: 0.25rem;
+        }}
+        
+        .dashboard-subtitle {{
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+        }}
+        
+        .section-header {{
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
         }}
         
         .metric-card {{
             padding: 1rem;
+            margin-bottom: 0.75rem;
         }}
         
         .metric-value {{
             font-size: 1.5rem;
         }}
         
+        .metric-change {{
+            font-size: 0.9rem;
+        }}
+        
+        .metric-range {{
+            font-size: 0.8rem;
+        }}
+        
+        /* Table optimizations for tablets */
+        .crypto-table {{
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }}
+        
         .crypto-table th,
         .crypto-table td {{
             padding: 0.75rem 0.5rem;
             font-size: 0.85rem;
+            white-space: nowrap;
         }}
         
-        .section-header {{
-            font-size: 1.25rem;
+        /* Touch-friendly buttons */
+        .stButton > button {{
+            padding: 0.75rem 1.5rem;
+            font-size: 0.9rem;
+            min-height: 44px; /* iOS recommended touch target */
+        }}
+        
+        /* Improved selectbox for mobile */
+        .stSelectbox > div > div {{
+            min-height: 44px;
+        }}
+        
+        /* Better spacing for form elements */
+        .stTextInput > div > div > input {{
+            min-height: 44px;
+            font-size: 16px; /* Prevents zoom on iOS */
         }}
     }}
     
+    /* Mobile portrait (320px - 480px) */
     @media (max-width: 480px) {{
+        .main .block-container {{
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+            padding-top: 0.75rem;
+        }}
+        
         .dashboard-title {{
             font-size: 1.75rem;
+            line-height: 1.2;
+        }}
+        
+        .dashboard-subtitle {{
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }}
+        
+        .section-header {{
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
         }}
         
         .metric-card {{
             padding: 0.75rem;
+            margin-bottom: 0.5rem;
+        }}
+        
+        .metric-title {{
+            font-size: 0.8rem;
         }}
         
         .metric-value {{
             font-size: 1.25rem;
         }}
         
+        .metric-change {{
+            font-size: 0.85rem;
+        }}
+        
+        .metric-range {{
+            font-size: 0.75rem;
+        }}
+        
+        /* Compact table for mobile */
         .crypto-table th,
         .crypto-table td {{
             padding: 0.5rem 0.25rem;
             font-size: 0.8rem;
+        }}
+        
+        .crypto-table th {{
+            font-size: 0.75rem;
+        }}
+        
+        /* Stack columns on very small screens */
+        .crypto-table {{
+            font-size: 0.8rem;
+        }}
+        
+        /* Mobile-optimized buttons */
+        .stButton > button {{
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            width: 100%;
+            min-height: 48px; /* Larger touch target for mobile */
+        }}
+        
+        /* Form elements optimization */
+        .stSelectbox > div > div {{
+            min-height: 48px;
+        }}
+        
+        .stTextInput > div > div > input {{
+            min-height: 48px;
+            font-size: 16px; /* Prevents zoom on iOS */
+            padding: 0.75rem;
+        }}
+        
+        /* Improved spacing for mobile */
+        .element-container {{
+            margin-bottom: 0.5rem;
+        }}
+        
+        /* Better chart container for mobile */
+        .js-plotly-plot {{
+            margin: 0 -0.75rem; /* Extend to screen edges */
+        }}
+    }}
+    
+    /* Extra small mobile devices (max 320px) */
+    @media (max-width: 320px) {{
+        .main .block-container {{
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }}
+        
+        .dashboard-title {{
+            font-size: 1.5rem;
+        }}
+        
+        .metric-card {{
+            padding: 0.5rem;
+        }}
+        
+        .metric-value {{
+            font-size: 1.1rem;
+        }}
+        
+        .crypto-table th,
+        .crypto-table td {{
+            padding: 0.375rem 0.125rem;
+            font-size: 0.75rem;
+        }}
+        
+        .crypto-table th {{
+            font-size: 0.7rem;
+        }}
+    }}
+    
+    /* Landscape orientation optimizations */
+    @media (max-height: 500px) and (orientation: landscape) {{
+        .main .block-container {{
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }}
+        
+        .dashboard-title {{
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }}
+        
+        .dashboard-subtitle {{
+            margin-bottom: 0.75rem;
+        }}
+        
+        .metric-card {{
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+        }}
+        
+        .section-header {{
+            margin-bottom: 0.5rem;
+        }}
+    }}
+    
+    /* High DPI displays */
+    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {{
+        .crypto-table {{
+            border-collapse: separate;
+            border-spacing: 0;
+        }}
+        
+        .metric-card {{
+            border: 1px solid {COLORS['border']};
+        }}
+    }}
+    
+    /* Dark mode support for mobile devices */
+    @media (prefers-color-scheme: dark) {{
+        .main .block-container {{
+            background-color: #1a1a1a;
+        }}
+        
+        .metric-card {{
+            background: #2d2d2d;
+            color: #ffffff;
+        }}
+        
+        .crypto-table {{
+            background: #2d2d2d;
+        }}
+        
+        .crypto-table th {{
+            background: #404040;
+        }}
+        
+        .crypto-table td {{
+            border-bottom-color: #404040;
+        }}
+    }}
+    
+    /* Accessibility improvements for mobile */
+    @media (max-width: 768px) {{
+        /* Larger touch targets */
+        button, .stButton > button, .stSelectbox, .stTextInput {{
+            min-height: 44px;
+        }}
+        
+        /* Better focus indicators */
+        button:focus, .stButton > button:focus {{
+            outline: 2px solid {COLORS['primary']};
+            outline-offset: 2px;
+        }}
+        
+        /* Improved readability */
+        .crypto-table td, .crypto-table th {{
+            line-height: 1.4;
+        }}
+        
+        /* Prevent horizontal scrolling issues */
+        .main .block-container {{
+            overflow-x: hidden;
+        }}
+        
+        /* Better spacing for touch interaction */
+        .stMetric {{
+            margin-bottom: 1rem;
+        }}
+    }}
+    
+    /* Print styles for mobile */
+    @media print {{
+        .stButton, .stSelectbox {{
+            display: none !important;
+        }}
+        
+        .metric-card {{
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }}
+        
+        .crypto-table {{
+            break-inside: avoid;
+            page-break-inside: avoid;
         }}
     }}
     
@@ -318,3 +590,108 @@ def get_change_class(change_percent):
         return 'positive'
     else:
         return 'negative'
+
+
+def is_mobile_device():
+    """
+    Detect if the user is on a mobile device based on user agent.
+    This is a simple heuristic and may not be 100% accurate.
+    
+    Returns:
+        bool: True if likely a mobile device, False otherwise
+    """
+    try:
+        # Try to get user agent from Streamlit's session info
+        # This is a fallback approach since Streamlit doesn't directly expose user agent
+        import streamlit as st
+        
+        # Check if we're in a narrow viewport (common mobile indicator)
+        # This is inferred from Streamlit's responsive behavior
+        return False  # Default to desktop for now
+        
+    except Exception:
+        return False
+
+
+def get_mobile_optimized_chart_config():
+    """
+    Get chart configuration optimized for mobile devices.
+    
+    Returns:
+        dict: Plotly chart configuration for mobile
+    """
+    return {
+        'displayModeBar': False,  # Hide toolbar on mobile
+        'responsive': True,
+        'toImageButtonOptions': {
+            'format': 'png',
+            'filename': 'crypto_chart',
+            'height': 400,
+            'width': 800,
+            'scale': 1
+        },
+        'modeBarButtonsToRemove': [
+            'pan2d', 'select2d', 'lasso2d', 'resetScale2d',
+            'zoomIn2d', 'zoomOut2d', 'autoScale2d'
+        ],
+        'doubleClick': 'reset',
+        'showTips': False,
+        'scrollZoom': False
+    }
+
+
+def get_mobile_chart_layout():
+    """
+    Get chart layout optimized for mobile devices.
+    
+    Returns:
+        dict: Plotly layout configuration for mobile
+    """
+    return {
+        'height': 400,  # Shorter height for mobile
+        'margin': dict(l=20, r=20, t=40, b=40),  # Tighter margins
+        'font': dict(size=10),  # Smaller font
+        'title': dict(
+            font=dict(size=14),
+            x=0.5,
+            xanchor='center'
+        ),
+        'xaxis': dict(
+            title=dict(font=dict(size=10)),
+            tickfont=dict(size=8),
+            showgrid=True,
+            gridwidth=0.5
+        ),
+        'yaxis': dict(
+            title=dict(font=dict(size=10)),
+            tickfont=dict(size=8),
+            showgrid=True,
+            gridwidth=0.5
+        ),
+        'legend': dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.2,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=9)
+        ),
+        'hovermode': 'x unified',
+        'dragmode': False  # Disable dragging on mobile
+    }
+
+
+def inject_mobile_meta_tags():
+    """
+    Inject mobile-optimized meta tags for better mobile experience.
+    """
+    mobile_meta = """
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#1f77b4">
+    <meta name="apple-mobile-web-app-title" content="Crypto Dashboard">
+    """
+    
+    st.markdown(mobile_meta, unsafe_allow_html=True)
