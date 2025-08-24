@@ -485,6 +485,49 @@ def render_homepage():
         render_error_message("Unable to load available cryptocurrencies for chart selection.", "warning")
         st.info("Chart functionality is temporarily unavailable. Please try refreshing the page.")
     
+    st.markdown("---")
+    
+    # Portfolio Tracker Section
+    from src.ui.components import render_portfolio_input_form, render_portfolio_tracker
+    
+    # Render portfolio input form
+    portfolio_holdings = render_portfolio_input_form()
+    
+    # If there are holdings, fetch prices and display portfolio tracker
+    if portfolio_holdings:
+        # Extract unique symbols from holdings
+        portfolio_symbols = list(set([holding['symbol'] for holding in portfolio_holdings]))
+        
+        # Fetch current prices for portfolio symbols
+        portfolio_prices = {}
+        
+        with st.spinner("🔄 Fetching portfolio prices..."):
+            try:
+                from src.api.binance_client import BinanceClient
+                client = BinanceClient()
+                
+                for symbol in portfolio_symbols:
+                    try:
+                        # Add USDT suffix for API call
+                        trading_pair = f"{symbol}USDT"
+                        ticker_data = client.get_ticker_24hr(trading_pair)
+                        portfolio_prices[symbol] = float(ticker_data['lastPrice'])
+                    except Exception as e:
+                        logger.warning(f"Could not fetch price for {symbol}: {e}")
+                        # Symbol will be handled as missing in the portfolio tracker
+                        continue
+                
+            except Exception as e:
+                logger.error(f"Error fetching portfolio prices: {e}")
+                st.error("❌ Unable to fetch current prices for portfolio calculation. Please try again later.")
+                portfolio_prices = {}
+        
+        # Render portfolio tracker with fetched prices
+        if portfolio_prices:
+            render_portfolio_tracker(portfolio_holdings, portfolio_prices)
+        else:
+            st.warning("⚠️ Unable to fetch prices for any of your portfolio holdings. Please check your symbols and try again.")
+    
     # Add last update timestamp
     st.markdown("---")
     
@@ -496,7 +539,6 @@ def render_homepage():
     st.info("""
     **Additional features in development:**
     - 🔍 Cryptocurrency search functionality
-    - 💼 Portfolio tracker with real-time calculations
     - 📱 Enhanced mobile experience
     """)
 
@@ -516,8 +558,12 @@ def main():
         )
         
         # Show error details in development
-        if st.secrets.get("debug", False):
-            st.exception(e)
+        try:
+            if st.secrets.get("debug", False):
+                st.exception(e)
+        except:
+            # No secrets file available, skip debug output
+            pass
 
 
 if __name__ == "__main__":

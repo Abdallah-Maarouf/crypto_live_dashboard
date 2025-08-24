@@ -422,3 +422,285 @@ def render_chart_controls(available_symbols: List[str]) -> tuple[str, str]:
         )
     
     return selected_symbol, selected_timeframe_key
+
+
+def render_portfolio_input_form() -> List[Dict[str, Any]]:
+    """
+    Render portfolio input form for cryptocurrency holdings.
+    
+    Returns:
+        List of portfolio holdings with symbol and quantity
+    """
+    st.markdown("### 💼 Portfolio Tracker")
+    st.markdown("Enter your cryptocurrency holdings to track your portfolio value in real-time.")
+    
+    # Initialize session state for portfolio holdings
+    if 'portfolio_holdings' not in st.session_state:
+        st.session_state.portfolio_holdings = []
+    
+    # Add new holding form
+    with st.expander("➕ Add New Holding", expanded=len(st.session_state.portfolio_holdings) == 0):
+        col1, col2, col3 = st.columns([2, 2, 1])
+        
+        with col1:
+            new_symbol = st.text_input(
+                "Cryptocurrency Symbol",
+                placeholder="e.g., BTC, ETH, ADA",
+                help="Enter the symbol without USDT (e.g., BTC for Bitcoin)",
+                key="new_symbol_input"
+            )
+        
+        with col2:
+            new_quantity = st.text_input(
+                "Quantity",
+                placeholder="e.g., 0.5, 10.25",
+                help="Enter the amount you own",
+                key="new_quantity_input"
+            )
+        
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+            add_button = st.button("Add", type="primary", use_container_width=True)
+        
+        # Handle adding new holding
+        if add_button:
+            from src.data.processor import validate_portfolio_input
+            
+            is_valid, error_message, parsed_quantity = validate_portfolio_input(new_symbol, new_quantity)
+            
+            if is_valid:
+                # Check if symbol already exists
+                existing_symbols = [h['symbol'] for h in st.session_state.portfolio_holdings]
+                if new_symbol.upper() in existing_symbols:
+                    st.error(f"❌ {new_symbol.upper()} is already in your portfolio. Remove it first to update the quantity.")
+                else:
+                    # Add new holding
+                    st.session_state.portfolio_holdings.append({
+                        'symbol': new_symbol.upper(),
+                        'quantity': parsed_quantity
+                    })
+                    st.success(f"✅ Added {parsed_quantity} {new_symbol.upper()} to your portfolio!")
+                    
+                    # Clear input fields by rerunning
+                    st.rerun()
+            else:
+                st.error(f"❌ {error_message}")
+    
+    # Display current holdings
+    if st.session_state.portfolio_holdings:
+        st.markdown("#### Current Holdings")
+        
+        # Create a table of current holdings with remove buttons
+        for i, holding in enumerate(st.session_state.portfolio_holdings):
+            col1, col2, col3 = st.columns([2, 2, 1])
+            
+            with col1:
+                st.text(holding['symbol'])
+            
+            with col2:
+                st.text(f"{holding['quantity']:,.8f}".rstrip('0').rstrip('.'))
+            
+            with col3:
+                if st.button("🗑️", key=f"remove_{i}", help=f"Remove {holding['symbol']}"):
+                    st.session_state.portfolio_holdings.pop(i)
+                    st.rerun()
+        
+        # Clear all button
+        if st.button("🗑️ Clear All Holdings", type="secondary"):
+            st.session_state.portfolio_holdings = []
+            st.rerun()
+    
+    else:
+        st.info("📝 No holdings added yet. Add your first cryptocurrency holding above to start tracking your portfolio.")
+    
+    return st.session_state.portfolio_holdings
+
+
+def render_portfolio_tracker(holdings: List[Dict[str, Any]], prices: Dict[str, float]):
+    """
+    Render complete portfolio tracker with real-time calculations and breakdown.
+    
+    Args:
+        holdings: List of portfolio holdings with symbol and quantity
+        prices: Dictionary mapping symbols to current prices
+    """
+    if not holdings:
+        st.info("💡 Add some cryptocurrency holdings above to see your portfolio value and breakdown.")
+        return
+    
+    from src.data.processor import calculate_portfolio_value, get_portfolio_breakdown
+    
+    # Calculate portfolio value and breakdown
+    total_value, portfolio_holdings, missing_symbols = calculate_portfolio_value(holdings, prices)
+    
+    # Handle missing symbols
+    if missing_symbols:
+        st.warning(f"⚠️ Unable to fetch prices for: {', '.join(missing_symbols)}. These holdings are excluded from calculations.")
+    
+    if not portfolio_holdings:
+        st.error("❌ No valid holdings could be priced. Please check your cryptocurrency symbols.")
+        return
+    
+    # Get detailed breakdown
+    breakdown = get_portfolio_breakdown(portfolio_holdings)
+    
+    # Display total portfolio value
+    st.markdown("#### 💰 Portfolio Summary")
+    
+    # Total value metric
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric(
+            label="Total Portfolio Value",
+            value=f"${total_value:,.2f}",
+            help="Current total value of all holdings in USD"
+        )
+    
+    with col2:
+        st.metric(
+            label="Number of Assets",
+            value=f"{breakdown['total_coins']}",
+            help="Number of different cryptocurrencies in portfolio"
+        )
+    
+    with col3:
+        if breakdown['largest_holding']:
+            largest = breakdown['largest_holding']
+            st.metric(
+                label="Largest Holding",
+                value=f"{largest.symbol}",
+                delta=f"{largest.percentage:.1f}%",
+                help=f"Your largest holding by value"
+            )
+    
+    st.markdown("---")
+    
+    # Portfolio breakdown table
+    st.markdown("#### 📊 Portfolio Breakdown")
+    
+    if breakdown['holdings']:
+        # Prepare data for display
+        breakdown_data = []
+        for holding in breakdown['holdings']:
+            breakdown_data.append({
+                'Symbol': holding.symbol,
+                'Quantity': f"{holding.quantity:,.8f}".rstrip('0').rstrip('.'),
+                'Current Value': f"${holding.current_value:,.2f}",
+                'Portfolio %': f"{holding.percentage:.2f}%",
+                '_percentage_value': holding.percentage  # For sorting/styling
+            })
+        
+        # Create DataFrame for better display
+        import pandas as pd
+        df = pd.DataFrame(breakdown_data)
+        
+        # Display the table
+        st.dataframe(
+            df.drop('_percentage_value', axis=1),
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                'Symbol': st.column_config.TextColumn(
+                    'Symbol',
+                    width='small',
+                    help="Cryptocurrency symbol"
+                ),
+                'Quantity': st.column_config.TextColumn(
+                    'Quantity',
+                    width='medium',
+                    help="Amount you own"
+                ),
+                'Current Value': st.column_config.TextColumn(
+                    'Current Value',
+                    width='medium',
+                    help="Current USD value of this holding"
+                ),
+                'Portfolio %': st.column_config.TextColumn(
+                    'Portfolio %',
+                    width='small',
+                    help="Percentage of total portfolio value"
+                )
+            }
+        )
+        
+        # Portfolio composition chart
+        st.markdown("#### 🥧 Portfolio Composition")
+        
+        try:
+            # Create DataFrame for pie chart
+            import pandas as pd
+            import plotly.express as px
+            
+            chart_df = pd.DataFrame({
+                'Symbol': [h.symbol for h in breakdown['holdings']],
+                'Value': [h.current_value for h in breakdown['holdings']],
+                'Percentage': [h.percentage for h in breakdown['holdings']]
+            })
+            
+            # Create pie chart using DataFrame
+            fig = px.pie(
+                chart_df,
+                values='Value',
+                names='Symbol',
+                title="Portfolio Allocation by Value",
+                hover_data=['Percentage']
+            )
+            
+            fig.update_traces(
+                textposition='inside',
+                textinfo='percent+label',
+                hovertemplate='<b>%{label}</b><br>' +
+                             'Value: $%{value:,.2f}<br>' +
+                             'Portfolio: %{customdata[0]:.2f}%<br>' +
+                             '<extra></extra>'
+            )
+            
+            fig.update_layout(
+                showlegend=True,
+                height=400,
+                margin=dict(t=50, b=50, l=50, r=50)
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+        except ImportError:
+            # Fallback to simple text display if plotly is not available
+            st.info("📊 Portfolio composition chart requires Plotly. Here's your allocation breakdown:")
+            for holding in breakdown['holdings']:
+                st.write(f"• **{holding.symbol}**: {holding.percentage:.2f}% (${holding.current_value:,.2f})")
+        except Exception as e:
+            st.error(f"Error creating portfolio chart: {str(e)}")
+            # Show simple breakdown as fallback
+            for holding in breakdown['holdings']:
+                st.write(f"• **{holding.symbol}**: {holding.percentage:.2f}% (${holding.current_value:,.2f})")
+        
+        # Portfolio insights
+        st.markdown("#### 💡 Portfolio Insights")
+        
+        insights_col1, insights_col2 = st.columns(2)
+        
+        with insights_col1:
+            if breakdown['largest_holding']:
+                largest = breakdown['largest_holding']
+                st.info(f"🔝 **Largest Position:** {largest.symbol} makes up {largest.percentage:.1f}% of your portfolio (${largest.current_value:,.2f})")
+        
+        with insights_col2:
+            if breakdown['smallest_holding'] and breakdown['total_coins'] > 1:
+                smallest = breakdown['smallest_holding']
+                st.info(f"🔻 **Smallest Position:** {smallest.symbol} makes up {smallest.percentage:.1f}% of your portfolio (${smallest.current_value:,.2f})")
+        
+        # Diversification insight
+        if breakdown['total_coins'] >= 3:
+            # Check if portfolio is well diversified (no single holding > 50%)
+            max_percentage = max(h.percentage for h in breakdown['holdings'])
+            if max_percentage < 50:
+                st.success("✅ **Well Diversified:** No single asset dominates your portfolio (largest position < 50%)")
+            else:
+                st.warning(f"⚠️ **Concentration Risk:** Your largest position ({breakdown['largest_holding'].symbol}) represents {max_percentage:.1f}% of your portfolio")
+    
+    else:
+        st.error("❌ No portfolio data available for display.")
+    
+    # Add refresh note
+    st.caption("💡 Portfolio values are calculated using real-time prices and update automatically when you refresh the page.")
