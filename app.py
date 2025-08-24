@@ -17,8 +17,11 @@ from src.ui.components import (
     render_dashboard_header, 
     render_metric_grid, 
     render_error_message,
-    render_loading_state
+    render_loading_state,
+    render_price_chart,
+    render_chart_controls
 )
+from src.data.processor import prepare_chart_data
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -103,6 +106,123 @@ def fetch_top_10_cryptos() -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"Unexpected error fetching top cryptos: {e}")
+        return {
+            'success': False,
+            'error': f"Unexpected error: {str(e)}",
+            'timestamp': datetime.now()
+        }
+
+
+@st.cache_data(ttl=3600)  # Cache for 1 hour - symbols don't change frequently
+def fetch_available_symbols() -> List[str]:
+    """
+    Fetch available cryptocurrency symbols for chart selection.
+    
+    Returns:
+        List of available symbols (without USDT suffix)
+    """
+    try:
+        client = BinanceClient()
+        exchange_info = client.get_exchange_info()
+        
+        # Extract USDT trading pairs and remove common stablecoins
+        symbols = []
+        excluded_symbols = {'USDCUSDT', 'BUSDUSDT', 'TUSDUSDT', 'DAIUSDT', 'USDPUSDT'}
+        
+        for symbol_info in exchange_info.get('symbols', []):
+            symbol = symbol_info.get('symbol', '')
+            status = symbol_info.get('status', '')
+            
+            # Only include active USDT pairs, exclude stablecoins
+            if (symbol.endswith('USDT') and 
+                status == 'TRADING' and 
+                symbol not in excluded_symbols):
+                # Remove USDT suffix for display
+                clean_symbol = symbol.replace('USDT', '')
+                symbols.append(clean_symbol)
+        
+        # Sort alphabetically and return top symbols for better UX
+        symbols.sort()
+        
+        # Prioritize major cryptocurrencies at the top
+        priority_symbols = ['BTC', 'ETH', 'BNB', 'ADA', 'XRP', 'SOL', 'DOT', 'AVAX', 'MATIC', 'LINK']
+        prioritized_symbols = []
+        
+        # Add priority symbols first (if they exist)
+        for priority in priority_symbols:
+            if priority in symbols:
+                prioritized_symbols.append(priority)
+                symbols.remove(priority)
+        
+        # Add remaining symbols
+        prioritized_symbols.extend(symbols)
+        
+        return prioritized_symbols[:50]  # Limit to 50 symbols for better performance
+        
+    except Exception as e:
+        logger.error(f"Error fetching available symbols: {e}")
+        # Return default symbols as fallback
+        return ['BTC', 'ETH', 'BNB', 'ADA', 'XRP', 'SOL', 'DOT', 'AVAX', 'MATIC', 'LINK']
+
+
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def fetch_historical_data(symbol: str, timeframe: str) -> Dict[str, Any]:
+    """
+    Fetch historical candlestick data for a cryptocurrency.
+    
+    Args:
+        symbol: Cryptocurrency symbol (without USDT)
+        timeframe: Timeframe (1h, 4h, 1d, 1w)
+        
+    Returns:
+        Dict containing historical data or error information
+    """
+    try:
+        client = BinanceClient()
+        
+        # Add USDT suffix for API call
+        trading_pair = f"{symbol.upper()}USDT"
+        
+        # Determine limit based on timeframe for reasonable chart data
+        limit_map = {
+            '1h': 168,   # 1 week of hourly data
+            '4h': 168,   # 4 weeks of 4-hour data  
+            '1d': 90,    # 3 months of daily data
+            '1w': 52     # 1 year of weekly data
+        }
+        
+        limit = limit_map.get(timeframe, 100)
+        
+        # Fetch klines data
+        klines_data = client.get_klines(trading_pair, timeframe, limit)
+        
+        if not klines_data:
+            return {
+                'success': False,
+                'error': f"No historical data available for {symbol}",
+                'timestamp': datetime.now()
+            }
+        
+        # Process the data using our data processor
+        chart_data = prepare_chart_data(klines_data)
+        
+        return {
+            'success': True,
+            'data': chart_data,
+            'symbol': symbol,
+            'timeframe': timeframe,
+            'timestamp': datetime.now()
+        }
+        
+    except BinanceAPIError as e:
+        logger.error(f"Binance API error fetching historical data for {symbol}: {e}")
+        return {
+            'success': False,
+            'error': f"API Error: {str(e)}",
+            'timestamp': datetime.now()
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error fetching historical data for {symbol}: {e}")
         return {
             'success': False,
             'error': f"Unexpected error: {str(e)}",
@@ -324,17 +444,57 @@ def render_homepage():
             )
             st.info("The top 10 cryptocurrencies table is temporarily unavailable. BTC and ETH data above is still live.")
     
+    st.markdown("---")
+    
+    # Historical Price Charts Section
+    st.markdown("### 📈 Historical Price Charts")
+    
+    # Fetch available symbols for dropdown
+    with st.spinner("🔄 Loading available cryptocurrencies..."):
+        available_symbols = fetch_available_symbols()
+    
+    if available_symbols:
+        # Render chart controls
+        selected_symbol, selected_timeframe = render_chart_controls(available_symbols)
+        
+        if selected_symbol and selected_timeframe:
+            # Fetch historical data
+            with st.spinner(f"🔄 Loading {selected_symbol} chart data..."):
+                historical_data = fetch_historical_data(selected_symbol, selected_timeframe)
+            
+            if historical_data['success']:
+                # Render the price chart
+                render_price_chart(
+                    chart_data=historical_data['data'],
+                    symbol=selected_symbol,
+                    timeframe=selected_timeframe
+                )
+                
+                # Add chart info
+                st.caption(f"💡 Chart shows {selected_symbol} price data with {selected_timeframe} intervals. Data is cached for 5 minutes.")
+                
+            else:
+                # Handle chart data errors
+                render_error_message(
+                    f"Unable to load chart data for {selected_symbol}: {historical_data['error']}", 
+                    "warning"
+                )
+                st.info(f"Historical data for {selected_symbol} may not be available or the symbol might not be supported. Try selecting a different cryptocurrency.")
+        
+    else:
+        render_error_message("Unable to load available cryptocurrencies for chart selection.", "warning")
+        st.info("Chart functionality is temporarily unavailable. Please try refreshing the page.")
+    
     # Add last update timestamp
     st.markdown("---")
     
     # Show data refresh info
-    st.caption("💡 Data is cached for performance: BTC/ETH for 30 seconds, Top 10 for 60 seconds. Use 'Refresh All Data' button for immediate updates.")
+    st.caption("💡 Data is cached for performance: BTC/ETH for 30 seconds, Top 10 for 60 seconds, Charts for 5 minutes. Use 'Refresh All Data' button for immediate updates.")
     
     # Add feature preview section
     st.markdown("### 🚀 Coming Soon")
     st.info("""
     **Additional features in development:**
-    - 📈 Interactive historical price charts  
     - 🔍 Cryptocurrency search functionality
     - 💼 Portfolio tracker with real-time calculations
     - 📱 Enhanced mobile experience

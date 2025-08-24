@@ -7,6 +7,7 @@ throughout the Streamlit application for displaying cryptocurrency data.
 
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 from typing import List, Dict, Any, Optional
 from .styles import get_color_for_change, get_change_class
 
@@ -301,3 +302,123 @@ def render_portfolio_summary(portfolio_data: Dict[str, Any]):
     holdings = portfolio_data.get('holdings', [])
     if holdings:
         render_crypto_table(holdings, "Portfolio Holdings")
+
+
+def render_price_chart(chart_data: pd.DataFrame, symbol: str, timeframe: str) -> None:
+    """
+    Render an interactive Plotly candlestick chart for cryptocurrency price data.
+    
+    Args:
+        chart_data (pd.DataFrame): DataFrame with OHLCV data (columns: timestamp, open, high, low, close, volume)
+        symbol (str): Cryptocurrency symbol for chart title
+        timeframe (str): Timeframe for chart title (e.g., '1h', '4h', '1d', '1w')
+    """
+    if chart_data.empty:
+        render_error_message("No historical data available for the selected cryptocurrency and timeframe.", "warning")
+        return
+    
+    try:
+        # Create candlestick chart
+        fig = go.Figure(data=go.Candlestick(
+            x=chart_data['timestamp'],
+            open=chart_data['open'],
+            high=chart_data['high'],
+            low=chart_data['low'],
+            close=chart_data['close'],
+            name=f"{symbol} Price"
+        ))
+        
+        # Add volume as a secondary trace (bar chart)
+        fig.add_trace(go.Bar(
+            x=chart_data['timestamp'],
+            y=chart_data['volume'],
+            name="Volume",
+            yaxis="y2",
+            opacity=0.3,
+            marker_color='rgba(158,202,225,0.8)',
+            hoverinfo='x+y+name'
+        ))
+        
+        # Update layout for better appearance
+        fig.update_layout(
+            title=f"{symbol} Price Chart ({timeframe})",
+            title_font_size=20,
+            title_x=0.5,
+            xaxis_title="Time",
+            yaxis_title="Price (USD)",
+            yaxis2=dict(
+                title="Volume",
+                overlaying="y",
+                side="right",
+                showgrid=False
+            ),
+            template="plotly_white",
+            height=600,
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(l=50, r=50, t=80, b=50),
+            hovermode='x'
+        )
+        
+        # Customize candlestick colors
+        fig.update_traces(
+            increasing_line_color='#2ca02c',
+            decreasing_line_color='#d62728',
+            selector=dict(type='candlestick')
+        )
+        
+        # Remove range slider for cleaner look
+        fig.update_layout(xaxis_rangeslider_visible=False)
+        
+        # Display the chart
+        st.plotly_chart(fig, use_container_width=True)
+        
+    except Exception as e:
+        render_error_message(f"Error rendering chart: {str(e)}", "error")
+
+
+def render_chart_controls(available_symbols: List[str]) -> tuple[str, str]:
+    """
+    Render cryptocurrency selection dropdown and timeframe selector controls.
+    
+    Args:
+        available_symbols (List[str]): List of available cryptocurrency symbols
+        
+    Returns:
+        tuple: (selected_symbol, selected_timeframe)
+    """
+    # Define available timeframes with labels
+    timeframe_options = {
+        '1h': '1 Hour',
+        '4h': '4 Hours', 
+        '1d': '1 Day',
+        '1w': '1 Week'
+    }
+    
+    # Create two columns for controls
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        selected_symbol = st.selectbox(
+            "Select Cryptocurrency",
+            options=available_symbols,
+            index=0 if available_symbols else None,
+            help="Choose a cryptocurrency to view its historical price chart"
+        )
+    
+    with col2:
+        selected_timeframe_key = st.selectbox(
+            "Select Timeframe",
+            options=list(timeframe_options.keys()),
+            format_func=lambda x: timeframe_options[x],
+            index=2,  # Default to '1d' (1 Day)
+            help="Choose the timeframe for the candlestick chart"
+        )
+    
+    return selected_symbol, selected_timeframe_key
