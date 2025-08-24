@@ -216,3 +216,39 @@ class BinanceClient:
         }
         
         return self._make_request("/klines", params)
+    
+    @cache_response(60)  # Cache for 1 minute - top cryptos change frequently
+    def get_top_volume_symbols(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get top cryptocurrencies by 24hr volume, sorted in descending order.
+        
+        Args:
+            limit: Number of top symbols to return (default: 10)
+            
+        Returns:
+            List of ticker data for top volume cryptocurrencies
+        """
+        # Get all USDT pairs ticker data
+        all_tickers = self.get_ticker_24hr()
+        
+        # Filter for USDT pairs only (exclude stablecoins and other pairs)
+        usdt_pairs = []
+        excluded_symbols = {'USDCUSDT', 'BUSDUSDT', 'TUSDUSDT', 'DAIUSDT', 'USDPUSDT'}
+        
+        for ticker in all_tickers:
+            symbol = ticker['symbol']
+            # Only include USDT pairs, exclude stablecoins
+            if symbol.endswith('USDT') and symbol not in excluded_symbols:
+                try:
+                    # Convert volume to float for sorting
+                    ticker['volumeFloat'] = float(ticker['quoteVolume'])
+                    usdt_pairs.append(ticker)
+                except (ValueError, KeyError):
+                    # Skip tickers with invalid volume data
+                    continue
+        
+        # Sort by 24hr quote volume (USD volume) in descending order
+        sorted_pairs = sorted(usdt_pairs, key=lambda x: x['volumeFloat'], reverse=True)
+        
+        # Return top N pairs
+        return sorted_pairs[:limit]

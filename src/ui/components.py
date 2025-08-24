@@ -55,23 +55,10 @@ def render_crypto_table(data: List[Dict[str, Any]], title: str = "Cryptocurrency
         return
     
     # Create section header
-    st.markdown(f'<div class="section-header">{title}</div>', unsafe_allow_html=True)
+    st.subheader(title)
     
-    # Prepare table HTML
-    table_html = """
-    <div class="crypto-table">
-        <table>
-            <thead>
-                <tr>
-                    <th>Symbol</th>
-                    <th>Price (USD)</th>
-                    <th>24h Change</th>
-                    <th>Volume</th>
-                </tr>
-            </thead>
-            <tbody>
-    """
-    
+    # Prepare data for DataFrame
+    table_data = []
     for coin in data:
         symbol = coin.get('symbol', 'N/A')
         price = coin.get('price', 0)
@@ -83,25 +70,57 @@ def render_crypto_table(data: List[Dict[str, Any]], title: str = "Cryptocurrency
         change_formatted = f"{'+' if change >= 0 else ''}{change:.2f}%"
         volume_formatted = f"${volume:,.0f}" if volume else "N/A"
         
-        # Get change class for styling
-        change_class = 'crypto-change-positive' if change >= 0 else 'crypto-change-negative'
-        
-        table_html += f"""
-        <tr>
-            <td class="crypto-symbol">{symbol}</td>
-            <td class="crypto-price">{price_formatted}</td>
-            <td class="{change_class}">{change_formatted}</td>
-            <td>{volume_formatted}</td>
-        </tr>
-        """
+        table_data.append({
+            'Symbol': symbol,
+            'Price (USD)': price_formatted,
+            '24h Change': change_formatted,
+            'Volume': volume_formatted,
+            '_change_value': change  # Hidden column for styling
+        })
     
-    table_html += """
-            </tbody>
-        </table>
-    </div>
-    """
+    # Create DataFrame
+    df = pd.DataFrame(table_data)
     
-    st.markdown(table_html, unsafe_allow_html=True)
+    # Function to style the dataframe
+    def style_crypto_table(val, change_val):
+        if 'Change' in str(val):
+            if change_val >= 0:
+                return 'color: #2ca02c; font-weight: 600;'
+            else:
+                return 'color: #d62728; font-weight: 600;'
+        elif 'Symbol' in str(val):
+            return 'font-weight: 700;'
+        elif 'Price' in str(val):
+            return 'font-weight: 600;'
+        return ''
+    
+    # Apply styling and display
+    styled_df = df.drop('_change_value', axis=1)
+    
+    # Use Streamlit's dataframe with custom styling
+    st.dataframe(
+        styled_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            'Symbol': st.column_config.TextColumn(
+                'Symbol',
+                width='small'
+            ),
+            'Price (USD)': st.column_config.TextColumn(
+                'Price (USD)',
+                width='medium'
+            ),
+            '24h Change': st.column_config.TextColumn(
+                '24h Change',
+                width='small'
+            ),
+            'Volume': st.column_config.TextColumn(
+                'Volume',
+                width='large'
+            )
+        }
+    )
 
 
 def render_loading_state(message: str = "Loading data..."):
@@ -190,6 +209,70 @@ def render_search_results(coin_data: Dict[str, Any]):
         change=coin_data.get('change_24h', 0),
         high=f"${coin_data.get('high_24h', 0):,.2f}",
         low=f"${coin_data.get('low_24h', 0):,.2f}"
+    )
+
+
+def render_crypto_table(data: List[Dict[str, Any]], title: str = "Cryptocurrency Data"):
+    """
+    Render a styled table for displaying cryptocurrency data with color-coded changes.
+    
+    Args:
+        data (List[Dict]): List of cryptocurrency data dictionaries
+        title (str): Title for the table section
+    """
+    if not data:
+        st.warning("No cryptocurrency data available to display.")
+        return
+    
+    # Create section header
+    st.subheader(title)
+    
+    # Prepare data for DataFrame
+    table_data = []
+    for coin in data:
+        symbol = coin.get('symbol', 'N/A')
+        price = coin.get('price', 0)
+        change = coin.get('change_24h', 0)
+        volume = coin.get('volume', 0)
+        
+        # Format values
+        price_formatted = f"${price:,.2f}" if price else "N/A"
+        change_formatted = f"{'+' if change >= 0 else ''}{change:.2f}%"
+        volume_formatted = f"${volume:,.0f}" if volume else "N/A"
+        
+        table_data.append({
+            'Symbol': symbol,
+            'Price (USD)': price_formatted,
+            '24h Change': change_formatted,
+            'Volume (USD)': volume_formatted
+        })
+    
+    # Create DataFrame and display
+    df = pd.DataFrame(table_data)
+    
+    # Use Streamlit's dataframe with custom styling
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            'Symbol': st.column_config.TextColumn(
+                'Symbol',
+                width='small'
+            ),
+            'Price (USD)': st.column_config.TextColumn(
+                'Price (USD)',
+                width='medium'
+            ),
+            '24h Change': st.column_config.TextColumn(
+                '24h Change',
+                width='small'
+            ),
+            'Volume (USD)': st.column_config.TextColumn(
+                'Volume (USD)',
+                width='large'
+            )
+        }
     )
 
 
