@@ -9,7 +9,10 @@ from src.data.processor import (
     PortfolioHolding, 
     format_price_data, 
     format_percentage_change, 
-    prepare_chart_data
+    prepare_chart_data,
+    validate_portfolio_input,
+    calculate_portfolio_value,
+    get_portfolio_breakdown
 )
 
 
@@ -49,6 +52,18 @@ class TestPortfolioHolding:
         assert holding.symbol == "ETH"
         assert holding.quantity == 10.5
         assert holding.current_value == 35000.0
+        assert holding.percentage == 0.0
+    
+    def test_portfolio_holding_with_percentage(self):
+        """Test PortfolioHolding with percentage specified."""
+        holding = PortfolioHolding(
+            symbol="BTC",
+            quantity=1.0,
+            current_value=45000.0,
+            percentage=75.0
+        )
+        
+        assert holding.percentage == 75.0
 
 
 class TestFormatPriceData:
@@ -202,3 +217,256 @@ class TestPrepareChartData:
         assert result.iloc[0]['low'] == 44000.00
         assert result.iloc[0]['close'] == 45500.00
         assert result.iloc[0]['volume'] == 1000.00
+
+
+class TestValidatePortfolioInput:
+    """Test portfolio input validation function."""
+    
+    def test_valid_symbol_and_quantity(self):
+        """Test validation with valid symbol and quantity."""
+        is_valid, error, quantity = validate_portfolio_input("BTC", "1.5")
+        assert is_valid is True
+        assert error == ""
+        assert quantity == 1.5
+    
+    def test_valid_symbol_case_insensitive(self):
+        """Test validation with lowercase symbol."""
+        is_valid, error, quantity = validate_portfolio_input("eth", "10.0")
+        assert is_valid is True
+        assert error == ""
+        assert quantity == 10.0
+    
+    def test_invalid_symbol_empty(self):
+        assert quantity == 1.5
+    
+    def test_valid_symbol_case_insensitive(self):
+        """Test validation with lowercase symbol."""
+        is_valid, error, quantity = validate_portfolio_input("eth", "10.0")
+        assert is_valid is True
+        assert error == ""
+        assert quantity == 10.0
+    
+    def test_invalid_symbol_empty(self):
+        """Test validation with empty symbol."""
+        is_valid, error, quantity = validate_portfolio_input("", "1.0")
+        assert is_valid is False
+        assert error == "Symbol is required"
+        assert quantity is None
+    
+    def test_invalid_symbol_too_short(self):
+        """Test validation with symbol too short."""
+        is_valid, error, quantity = validate_portfolio_input("A", "1.0")
+        assert is_valid is False
+        assert error == "Symbol must be 2-10 letters only"
+        assert quantity is None
+    
+    def test_invalid_symbol_too_long(self):
+        """Test validation with symbol too long."""
+        is_valid, error, quantity = validate_portfolio_input("VERYLONGSYMBOL", "1.0")
+        assert is_valid is False
+        assert error == "Symbol must be 2-10 letters only"
+        assert quantity is None
+    
+    def test_invalid_symbol_with_numbers(self):
+        """Test validation with symbol containing numbers."""
+        is_valid, error, quantity = validate_portfolio_input("BTC1", "1.0")
+        assert is_valid is False
+        assert error == "Symbol must be 2-10 letters only"
+        assert quantity is None
+    
+    def test_invalid_quantity_empty(self):
+        """Test validation with empty quantity."""
+        is_valid, error, quantity = validate_portfolio_input("BTC", "")
+        assert is_valid is False
+        assert error == "Quantity is required"
+        assert quantity is None
+    
+    def test_invalid_quantity_negative(self):
+        """Test validation with negative quantity."""
+        is_valid, error, quantity = validate_portfolio_input("BTC", "-1.0")
+        assert is_valid is False
+        assert error == "Quantity must be positive"
+        assert quantity is None
+    
+    def test_invalid_quantity_zero(self):
+        """Test validation with zero quantity."""
+        is_valid, error, quantity = validate_portfolio_input("BTC", "0")
+        assert is_valid is False
+        assert error == "Quantity must be positive"
+        assert quantity is None
+    
+    def test_invalid_quantity_too_large(self):
+        """Test validation with extremely large quantity."""
+        is_valid, error, quantity = validate_portfolio_input("BTC", "1e13")
+        assert is_valid is False
+        assert error == "Quantity is too large"
+        assert quantity is None
+    
+    def test_invalid_quantity_not_number(self):
+        """Test validation with non-numeric quantity."""
+        is_valid, error, quantity = validate_portfolio_input("BTC", "abc")
+        assert is_valid is False
+        assert error == "Quantity must be a valid number"
+        assert quantity is None
+    
+    def test_valid_decimal_quantity(self):
+        """Test validation with decimal quantity."""
+        is_valid, error, quantity = validate_portfolio_input("ETH", "0.123456")
+        assert is_valid is True
+        assert error == ""
+        assert quantity == 0.123456
+
+
+class TestCalculatePortfolioValue:
+    """Test portfolio value calculation function."""
+    
+    def test_calculate_empty_portfolio(self):
+        """Test calculation with empty portfolio."""
+        total_value, holdings, missing = calculate_portfolio_value([], {})
+        assert total_value == 0.0
+        assert holdings == []
+        assert missing == []
+    
+    def test_calculate_single_holding(self):
+        """Test calculation with single holding."""
+        holdings = [{"symbol": "BTC", "quantity": 1.0}]
+        prices = {"BTC": 45000.0}
+        
+        total_value, portfolio_holdings, missing = calculate_portfolio_value(holdings, prices)
+        
+        assert total_value == 45000.0
+        assert len(portfolio_holdings) == 1
+        assert portfolio_holdings[0].symbol == "BTC"
+        assert portfolio_holdings[0].quantity == 1.0
+        assert portfolio_holdings[0].current_value == 45000.0
+        assert portfolio_holdings[0].percentage == 100.0
+        assert missing == []
+    
+    def test_calculate_multiple_holdings(self):
+        """Test calculation with multiple holdings."""
+        holdings = [
+            {"symbol": "BTC", "quantity": 1.0},
+            {"symbol": "ETH", "quantity": 10.0},
+            {"symbol": "ADA", "quantity": 1000.0}
+        ]
+        prices = {"BTC": 45000.0, "ETH": 3000.0, "ADA": 1.0}
+        
+        total_value, portfolio_holdings, missing = calculate_portfolio_value(holdings, prices)
+        
+        assert total_value == 76000.0  # 45000 + 30000 + 1000
+        assert len(portfolio_holdings) == 3
+        assert missing == []
+        
+        # Check BTC holding
+        btc_holding = next(h for h in portfolio_holdings if h.symbol == "BTC")
+        assert btc_holding.current_value == 45000.0
+        assert abs(btc_holding.percentage - 59.21) < 0.01  # 45000/76000 * 100
+        
+        # Check ETH holding
+        eth_holding = next(h for h in portfolio_holdings if h.symbol == "ETH")
+        assert eth_holding.current_value == 30000.0
+        assert abs(eth_holding.percentage - 39.47) < 0.01  # 30000/76000 * 100
+        
+        # Check ADA holding
+        ada_holding = next(h for h in portfolio_holdings if h.symbol == "ADA")
+        assert ada_holding.current_value == 1000.0
+        assert abs(ada_holding.percentage - 1.32) < 0.01  # 1000/76000 * 100
+    
+    def test_calculate_with_missing_prices(self):
+        """Test calculation with some missing price data."""
+        holdings = [
+            {"symbol": "BTC", "quantity": 1.0},
+            {"symbol": "ETH", "quantity": 10.0},
+            {"symbol": "UNKNOWN", "quantity": 100.0}
+        ]
+        prices = {"BTC": 45000.0, "ETH": 3000.0}
+        
+        total_value, portfolio_holdings, missing = calculate_portfolio_value(holdings, prices)
+        
+        assert total_value == 75000.0  # 45000 + 30000
+        assert len(portfolio_holdings) == 2
+        assert missing == ["UNKNOWN"]
+    
+    def test_calculate_case_insensitive_symbols(self):
+        """Test calculation with lowercase symbols in holdings."""
+        holdings = [{"symbol": "btc", "quantity": 1.0}]
+        prices = {"BTC": 45000.0}
+        
+        total_value, portfolio_holdings, missing = calculate_portfolio_value(holdings, prices)
+        
+        assert total_value == 45000.0
+        assert len(portfolio_holdings) == 1
+        assert portfolio_holdings[0].symbol == "BTC"
+        assert missing == []
+    
+    def test_calculate_zero_quantity(self):
+        """Test calculation with zero quantity holding."""
+        holdings = [{"symbol": "BTC", "quantity": 0.0}]
+        prices = {"BTC": 45000.0}
+        
+        total_value, portfolio_holdings, missing = calculate_portfolio_value(holdings, prices)
+        
+        assert total_value == 0.0
+        assert len(portfolio_holdings) == 1
+        assert portfolio_holdings[0].current_value == 0.0
+        assert portfolio_holdings[0].percentage == 0.0
+        assert missing == []
+
+
+class TestGetPortfolioBreakdown:
+    """Test portfolio breakdown function."""
+    
+    def test_breakdown_empty_portfolio(self):
+        """Test breakdown with empty portfolio."""
+        breakdown = get_portfolio_breakdown([])
+        
+        assert breakdown['total_value'] == 0.0
+        assert breakdown['total_coins'] == 0
+        assert breakdown['holdings'] == []
+        assert breakdown['largest_holding'] is None
+        assert breakdown['smallest_holding'] is None
+    
+    def test_breakdown_single_holding(self):
+        """Test breakdown with single holding."""
+        holdings = [PortfolioHolding("BTC", 1.0, 45000.0, 100.0)]
+        breakdown = get_portfolio_breakdown(holdings)
+        
+        assert breakdown['total_value'] == 45000.0
+        assert breakdown['total_coins'] == 1
+        assert len(breakdown['holdings']) == 1
+        assert breakdown['largest_holding'].symbol == "BTC"
+        assert breakdown['smallest_holding'].symbol == "BTC"
+    
+    def test_breakdown_multiple_holdings_sorted(self):
+        """Test breakdown with multiple holdings sorted by value."""
+        holdings = [
+            PortfolioHolding("ADA", 1000.0, 1000.0, 1.32),
+            PortfolioHolding("BTC", 1.0, 45000.0, 59.21),
+            PortfolioHolding("ETH", 10.0, 30000.0, 39.47)
+        ]
+        breakdown = get_portfolio_breakdown(holdings)
+        
+        assert breakdown['total_value'] == 76000.0
+        assert breakdown['total_coins'] == 3
+        assert len(breakdown['holdings']) == 3
+        
+        # Check sorting (should be BTC, ETH, ADA by value)
+        assert breakdown['holdings'][0].symbol == "BTC"
+        assert breakdown['holdings'][1].symbol == "ETH"
+        assert breakdown['holdings'][2].symbol == "ADA"
+        
+        assert breakdown['largest_holding'].symbol == "BTC"
+        assert breakdown['smallest_holding'].symbol == "ADA"
+    
+    def test_breakdown_equal_values(self):
+        """Test breakdown with equal value holdings."""
+        holdings = [
+            PortfolioHolding("BTC", 0.5, 22500.0, 50.0),
+            PortfolioHolding("ETH", 7.5, 22500.0, 50.0)
+        ]
+        breakdown = get_portfolio_breakdown(holdings)
+        
+        assert breakdown['total_value'] == 45000.0
+        assert breakdown['total_coins'] == 2
+        assert breakdown['largest_holding'].current_value == 22500.0
+        assert breakdown['smallest_holding'].current_value == 22500.0
