@@ -7,6 +7,7 @@ Displays live market data, historical charts, and portfolio tracking.
 
 import streamlit as st
 import logging
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 
 # Import our custom modules
@@ -53,20 +54,23 @@ def fetch_btc_eth_data() -> Dict[str, Any]:
         return {
             'success': True,
             'btc': btc_data,
-            'eth': eth_data
+            'eth': eth_data,
+            'timestamp': datetime.now()
         }
         
     except BinanceAPIError as e:
         logger.error(f"Binance API error: {e}")
         return {
             'success': False,
-            'error': f"API Error: {str(e)}"
+            'error': f"API Error: {str(e)}",
+            'timestamp': datetime.now()
         }
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         return {
             'success': False,
-            'error': f"Unexpected error: {str(e)}"
+            'error': f"Unexpected error: {str(e)}",
+            'timestamp': datetime.now()
         }
 
 
@@ -86,20 +90,23 @@ def fetch_top_10_cryptos() -> Dict[str, Any]:
         
         return {
             'success': True,
-            'data': top_cryptos
+            'data': top_cryptos,
+            'timestamp': datetime.now()
         }
         
     except BinanceAPIError as e:
         logger.error(f"Binance API error fetching top cryptos: {e}")
         return {
             'success': False,
-            'error': f"API Error: {str(e)}"
+            'error': f"API Error: {str(e)}",
+            'timestamp': datetime.now()
         }
     except Exception as e:
         logger.error(f"Unexpected error fetching top cryptos: {e}")
         return {
             'success': False,
-            'error': f"Unexpected error: {str(e)}"
+            'error': f"Unexpected error: {str(e)}",
+            'timestamp': datetime.now()
         }
 
 
@@ -162,48 +169,88 @@ def format_top_crypto_data(crypto_list: List[Dict[str, Any]]) -> List[Dict[str, 
     return formatted_data
 
 
+def initialize_session_state():
+    """
+    Initialize session state variables for data caching and fallback.
+    """
+    if 'last_btc_eth_data' not in st.session_state:
+        st.session_state.last_btc_eth_data = None
+    
+    if 'last_top_10_data' not in st.session_state:
+        st.session_state.last_top_10_data = None
+
+
+
+
+
+def render_refresh_controls():
+    """
+    Render manual refresh controls.
+    """
+    col1, col2, col3 = st.columns([1, 1, 1])
+    
+    with col2:
+        if st.button("🔄 Refresh All Data", use_container_width=True):
+            # Clear all cached data
+            st.cache_data.clear()
+            st.rerun()
+
+
 def render_homepage():
     """
     Render the main dashboard homepage with BTC and ETH KPI cards and top 10 table.
     """
+    # Initialize session state
+    initialize_session_state()
+    
     # Dashboard header
     render_dashboard_header(
         title="Live Crypto Dashboard",
         subtitle="Real-time cryptocurrency market data powered by Binance API"
     )
     
-    # Add refresh button
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("🔄 Refresh Data", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
+    # Manual refresh controls
+    render_refresh_controls()
     
     st.markdown("---")
     
     # Fetch BTC/ETH data with loading state
-    with st.spinner("Loading market data..."):
-        data = fetch_btc_eth_data()
+    loading_placeholder = st.empty()
+    
+    with loading_placeholder:
+        with st.spinner("🔄 Loading market data..."):
+            data = fetch_btc_eth_data()
+    
+    # Clear loading placeholder
+    loading_placeholder.empty()
     
     if not data['success']:
-        # Handle API errors
-        render_error_message(
-            f"Unable to fetch market data: {data['error']}", 
-            "error"
-        )
-        
-        # Show fallback message
-        st.info("""
-        **Dashboard temporarily unavailable**
-        
-        The Binance API is currently unavailable. This could be due to:
-        - Network connectivity issues
-        - API rate limiting
-        - Temporary service outage
-        
-        Please try refreshing the page in a few moments.
-        """)
-        return
+        # Try to use last successful data if available
+        if st.session_state.last_btc_eth_data and st.session_state.last_btc_eth_data['success']:
+            st.warning("⚠️ Using cached data due to API error. Data may be stale.")
+            data = st.session_state.last_btc_eth_data
+        else:
+            # Handle API errors with no fallback
+            render_error_message(
+                f"Unable to fetch market data: {data['error']}", 
+                "error"
+            )
+            
+            # Show fallback message
+            st.info("""
+            **Dashboard temporarily unavailable**
+            
+            The Binance API is currently unavailable. This could be due to:
+            - Network connectivity issues
+            - API rate limiting
+            - Temporary service outage
+            
+            Please try refreshing the page in a few moments.
+            """)
+            return
+    else:
+        # Store successful data for fallback
+        st.session_state.last_btc_eth_data = data
     
     # Format the BTC/ETH data
     btc_formatted = format_ticker_data(data['btc'])
@@ -235,19 +282,20 @@ def render_homepage():
     # Top 10 Cryptocurrencies Section
     st.markdown("### 📊 Top 10 Cryptocurrencies by Volume")
     
-    # Add refresh button specifically for top 10 table
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("🔄 Refresh Top 10", use_container_width=True, key="refresh_top10"):
-            # Clear only the top 10 cache
-            fetch_top_10_cryptos.clear()
-            st.rerun()
+    # Fetch top 10 data with loading state
+    loading_placeholder_top10 = st.empty()
     
-    # Fetch top 10 data
-    with st.spinner("Loading top cryptocurrencies..."):
-        top_10_data = fetch_top_10_cryptos()
+    with loading_placeholder_top10:
+        with st.spinner("🔄 Loading top cryptocurrencies..."):
+            top_10_data = fetch_top_10_cryptos()
+    
+    # Clear loading placeholder
+    loading_placeholder_top10.empty()
     
     if top_10_data['success']:
+        # Store successful data for fallback
+        st.session_state.last_top_10_data = top_10_data
+        
         # Format the data for table display
         formatted_top_10 = format_top_crypto_data(top_10_data['data'])
         
@@ -258,16 +306,29 @@ def render_homepage():
         else:
             render_error_message("No cryptocurrency data available to display.", "warning")
     else:
-        # Handle API errors for top 10
-        render_error_message(
-            f"Unable to fetch top cryptocurrencies: {top_10_data['error']}", 
-            "warning"
-        )
-        st.info("The top 10 cryptocurrencies table is temporarily unavailable. BTC and ETH data above is still live.")
+        # Try to use last successful data if available
+        if st.session_state.last_top_10_data and st.session_state.last_top_10_data['success']:
+            st.warning("⚠️ Using cached top 10 data due to API error. Data may be stale.")
+            cached_data = st.session_state.last_top_10_data
+            
+            # Format and display cached data
+            formatted_top_10 = format_top_crypto_data(cached_data['data'])
+            if formatted_top_10:
+                from src.ui.components import render_crypto_table
+                render_crypto_table(formatted_top_10, "Top 10 Cryptocurrencies by 24h Volume (Cached)")
+        else:
+            # Handle API errors for top 10 with no fallback
+            render_error_message(
+                f"Unable to fetch top cryptocurrencies: {top_10_data['error']}", 
+                "warning"
+            )
+            st.info("The top 10 cryptocurrencies table is temporarily unavailable. BTC and ETH data above is still live.")
     
     # Add last update timestamp
     st.markdown("---")
-    st.caption("💡 Data updates automatically. BTC/ETH every 30 seconds, Top 10 every minute. Use refresh buttons for immediate updates.")
+    
+    # Show data refresh info
+    st.caption("💡 Data is cached for performance: BTC/ETH for 30 seconds, Top 10 for 60 seconds. Use 'Refresh All Data' button for immediate updates.")
     
     # Add feature preview section
     st.markdown("### 🚀 Coming Soon")
