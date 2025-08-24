@@ -1,5 +1,18 @@
-streamlit>=1.28.0
-requests>=2.31.0
-pandas>=2.0.0
-plotly>=5.15.0
-pyyaml>=6.0
+# Core Streamlit framework
+streamlit>=1.28.0,<2.0.0
+
+# HTTP requests for API calls
+requests>=2.31.0,<3.0.0
+
+# Data manipulation and analysis
+pandas>=2.0.0,<3.0.0
+
+# Interactive plotting and charts
+plotly>=5.15.0,<6.0.0
+
+# YAML configuration file parsing
+pyyaml>=6.0,<7.0.0
+
+# Additional dependencies for production deployment
+urllib3>=1.26.0,<3.0.0  # Ensure compatible urllib3 version
+certifi>=2023.0.0       # SSL certificate verification

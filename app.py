@@ -3,49 +3,76 @@ Live Crypto Dashboard - Main Streamlit Application
 
 A real-time cryptocurrency analytics dashboard powered by the Binance API.
 Displays live market data, historical charts, and portfolio tracking.
+
+Optimized for Streamlit Cloud deployment.
 """
 
 import streamlit as st
 import logging
+import sys
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 
-# Import our custom modules
-from src.api.binance_client import BinanceClient, BinanceAPIError
-from src.ui.styles import inject_custom_css, inject_mobile_meta_tags
-from src.ui.components import (
-    render_dashboard_header, 
-    render_metric_grid, 
-    render_error_message,
-    render_loading_state,
-    render_price_chart,
-    render_chart_controls
-)
-from src.data.processor import prepare_chart_data
+# Add src directory to Python path for deployment compatibility
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Import our custom modules with error handling for deployment
+try:
+    from src.api.binance_client import BinanceClient, BinanceAPIError
+    from src.ui.styles import inject_custom_css, inject_mobile_meta_tags
+    from src.ui.components import (
+        render_dashboard_header, 
+        render_metric_grid, 
+        render_error_message,
+        render_loading_state,
+        render_price_chart,
+        render_chart_controls
+    )
+    from src.data.processor import prepare_chart_data
+except ImportError as e:
+    st.error(f"❌ Import Error: {e}")
+    st.error("Please ensure all required modules are properly installed.")
+    st.stop()
+
+# Configure logging for deployment
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
 
-# Page configuration with mobile optimization
+# Deployment environment detection
+IS_CLOUD_DEPLOYMENT = os.getenv('STREAMLIT_SHARING_MODE') is not None or 'streamlit.io' in os.getenv('HOSTNAME', '')
+
+# Page configuration optimized for deployment
 st.set_page_config(
     page_title="Live Crypto Dashboard",
     page_icon="₿",
     layout="wide",
     initial_sidebar_state="collapsed",
     menu_items={
-        'Get Help': 'https://github.com/your-repo/crypto-dashboard',
-        'Report a bug': 'https://github.com/your-repo/crypto-dashboard/issues',
+        'Get Help': 'https://github.com/crypto-dashboard/crypto-dashboard',
+        'Report a bug': 'https://github.com/crypto-dashboard/crypto-dashboard/issues',
         'About': "Live Crypto Dashboard - Real-time cryptocurrency analytics powered by Binance API"
     }
 )
+
+# Log deployment environment
+if IS_CLOUD_DEPLOYMENT:
+    logger.info("Running in Streamlit Cloud deployment mode")
+else:
+    logger.info("Running in local development mode")
 
 # Inject mobile meta tags and custom CSS
 inject_mobile_meta_tags()
 inject_custom_css()
 
 
-@st.cache_data(ttl=30)  # Cache for 30 seconds
+@st.cache_data(ttl=30, show_spinner=False)  # Cache for 30 seconds, optimized for deployment
 def fetch_btc_eth_data() -> Dict[str, Any]:
     """
     Fetch BTC and ETH ticker data from Binance API.
@@ -83,7 +110,7 @@ def fetch_btc_eth_data() -> Dict[str, Any]:
         }
 
 
-@st.cache_data(ttl=60)  # Cache for 1 minute
+@st.cache_data(ttl=60, show_spinner=False)  # Cache for 1 minute, optimized for deployment
 def fetch_top_10_cryptos() -> Dict[str, Any]:
     """
     Fetch top 10 cryptocurrencies by volume from Binance API.
@@ -119,7 +146,7 @@ def fetch_top_10_cryptos() -> Dict[str, Any]:
         }
 
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour - symbols don't change frequently
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour - symbols don't change frequently, optimized for deployment
 def fetch_available_symbols() -> List[str]:
     """
     Fetch available cryptocurrency symbols for chart selection.
@@ -171,7 +198,7 @@ def fetch_available_symbols() -> List[str]:
         return ['BTC', 'ETH', 'BNB', 'ADA', 'XRP', 'SOL', 'DOT', 'AVAX', 'MATIC', 'LINK']
 
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300, show_spinner=False)  # Cache for 5 minutes, optimized for deployment
 def fetch_historical_data(symbol: str, timeframe: str) -> Dict[str, Any]:
     """
     Fetch historical candlestick data for a cryptocurrency.
@@ -295,6 +322,48 @@ def format_top_crypto_data(crypto_list: List[Dict[str, Any]]) -> List[Dict[str, 
     return formatted_data
 
 
+def check_deployment_health() -> Dict[str, Any]:
+    """
+    Perform deployment health checks to ensure all systems are operational.
+    
+    Returns:
+        Dict containing health check results
+    """
+    health_status = {
+        'api_connectivity': False,
+        'modules_loaded': True,  # If we got here, modules loaded successfully
+        'cache_system': False,
+        'errors': []
+    }
+    
+    try:
+        # Test API connectivity
+        client = BinanceClient()
+        test_response = client.get_ticker_24hr("BTCUSDT")
+        if test_response and 'lastPrice' in test_response:
+            health_status['api_connectivity'] = True
+        else:
+            health_status['errors'].append("API response format unexpected")
+    except Exception as e:
+        health_status['errors'].append(f"API connectivity failed: {str(e)}")
+    
+    try:
+        # Test cache system
+        @st.cache_data(ttl=1)
+        def test_cache():
+            return {"test": "success"}
+        
+        result = test_cache()
+        if result.get("test") == "success":
+            health_status['cache_system'] = True
+        else:
+            health_status['errors'].append("Cache system test failed")
+    except Exception as e:
+        health_status['errors'].append(f"Cache system error: {str(e)}")
+    
+    return health_status
+
+
 def initialize_session_state():
     """
     Initialize session state variables for data caching and fallback.
@@ -304,6 +373,23 @@ def initialize_session_state():
     
     if 'last_top_10_data' not in st.session_state:
         st.session_state.last_top_10_data = None
+    
+    if 'deployment_health_checked' not in st.session_state:
+        st.session_state.deployment_health_checked = False
+        
+    # Perform health check on first load in deployment
+    if IS_CLOUD_DEPLOYMENT and not st.session_state.deployment_health_checked:
+        health_status = check_deployment_health()
+        st.session_state.deployment_health_checked = True
+        
+        # Log health check results
+        if health_status['api_connectivity'] and health_status['cache_system']:
+            logger.info("✅ Deployment health check passed")
+        else:
+            logger.warning(f"⚠️ Deployment health check issues: {health_status['errors']}")
+            
+        # Store health status for potential display
+        st.session_state.health_status = health_status
 
 
 
@@ -559,25 +645,78 @@ def render_homepage():
 
 def main():
     """
-    Main application entry point.
+    Main application entry point with deployment-specific error handling.
     """
     try:
+        # Initialize session state and perform health checks
+        initialize_session_state()
+        
+        # Show deployment status if there are health issues
+        if (IS_CLOUD_DEPLOYMENT and 
+            hasattr(st.session_state, 'health_status') and 
+            st.session_state.health_status['errors']):
+            
+            with st.expander("⚠️ System Status", expanded=False):
+                st.warning("Some system components may be experiencing issues:")
+                for error in st.session_state.health_status['errors']:
+                    st.text(f"• {error}")
+                st.info("The dashboard will attempt to function with available components.")
+        
+        # Render main application
         render_homepage()
+        
+        # Add deployment footer
+        if IS_CLOUD_DEPLOYMENT:
+            st.markdown("---")
+            st.markdown(
+                "<div style='text-align: center; color: #666; font-size: 0.8em;'>"
+                "🚀 Deployed on Streamlit Cloud | "
+                "📊 Powered by Binance API | "
+                "⚡ Real-time Data"
+                "</div>", 
+                unsafe_allow_html=True
+            )
+        
+    except ImportError as e:
+        logger.error(f"Import error in deployment: {e}")
+        st.error("❌ **Deployment Error**: Required modules could not be loaded.")
+        st.error("This may be due to missing dependencies or incorrect file structure.")
+        st.code(f"Error details: {str(e)}")
+        st.stop()
         
     except Exception as e:
         logger.error(f"Application error: {e}")
-        render_error_message(
-            "An unexpected error occurred. Please refresh the page and try again.",
-            "error"
-        )
         
-        # Show error details in development
-        try:
-            if st.secrets.get("debug", False):
+        # Enhanced error handling for deployment
+        if IS_CLOUD_DEPLOYMENT:
+            st.error("❌ **Application Error**: The dashboard encountered an unexpected error.")
+            st.error("This may be temporary. Please try refreshing the page.")
+            
+            # Provide fallback information
+            st.info("""
+            **Troubleshooting Tips:**
+            - Refresh the page to retry
+            - Check if the Binance API is accessible
+            - Try again in a few minutes
+            """)
+            
+            # Log error details but don't expose them to users in production
+            logger.error(f"Full error details: {str(e)}")
+            
+        else:
+            # Development mode - show full error details
+            render_error_message(
+                "An unexpected error occurred. Please refresh the page and try again.",
+                "error"
+            )
+            
+            # Show error details in development
+            try:
+                if st.secrets.get("debug", False):
+                    st.exception(e)
+            except:
+                # No secrets file available, show exception anyway in dev
                 st.exception(e)
-        except:
-            # No secrets file available, skip debug output
-            pass
 
 
 if __name__ == "__main__":
