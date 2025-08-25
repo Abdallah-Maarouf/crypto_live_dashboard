@@ -46,7 +46,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Deployment environment detection
-IS_CLOUD_DEPLOYMENT = os.getenv('STREAMLIT_SHARING_MODE') is not None or 'streamlit.io' in os.getenv('HOSTNAME', '')
+IS_CLOUD_DEPLOYMENT = (
+    os.getenv('STREAMLIT_SHARING_MODE') is not None or 
+    'streamlit.io' in os.getenv('HOSTNAME', '') or
+    'render.com' in os.getenv('RENDER_EXTERNAL_URL', '') or
+    os.getenv('RENDER') is not None
+)
 
 # Page configuration optimized for deployment
 st.set_page_config(
